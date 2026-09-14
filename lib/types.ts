@@ -19,10 +19,12 @@ export interface PreviewRequest {
   garment: GarmentStyle;
   photoDataUrl?: string;
   sidePhotoDataUrl?: string;
+  garmentDataUrl?: string;
 }
 
 export interface PreviewResponse {
   status: 'ready' | 'demo';
+  imageUrl?: string;
   message: string;
   bodyProfile: string;
   colorMatch: { name: string; score: number; reason: string };
