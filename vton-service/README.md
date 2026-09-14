@@ -1,78 +1,47 @@
-# Smart Tailor MIT VTON GPU Service
+---
+title: Smart Tailor VTON
+emoji: 👔
+colorFrom: stone
+colorTo: amber
+sdk: gradio
+sdk_version: 6.3.0
+python_version: 3.10
+app_file: app.py
+pinned: false
+license: apache-2.0
+short_description: Smart Tailor virtual try-on using FASHN VTON 1.5
+---
 
-This folder defines the GPU-side service contract used by Smart Tailor AI.
+# Smart Tailor VTON GPU Service
 
-The Next.js app sends a `PreviewRequest` to `MIT_VTON_ENDPOINT` and expects:
-
-```json
-{
-  "imageUrl": "https://.../generated-result.png"
-}
-```
-
-Accepted response key: `imageUrl` or `image_url`.
-
-## Request
-
-```json
-{
-  "measurements": {
-    "height": 178,
-    "chest": 102,
-    "waist": 88,
-    "shoulder": 45
-  },
-  "garment": {
-    "type": "shirt",
-    "style": "slim",
-    "colorName": "Navy",
-    "colorHex": "#17243a"
-  },
-  "photoDataUrl": "data:image/jpeg;base64,..."
-}
-```
-
-The service should:
-
-1. Decode the customer front photo.
-2. Decode/obtain the target garment image.
-3. Run the MIT-licensed virtual try-on inference pipeline.
-4. Save the generated result to temporary/object storage.
-5. Return a public HTTPS image URL.
+This Space is the GPU inference side of Smart Tailor AI.
 
 ## Model
 
-The initial commercial-safe candidate is `huzaifanasir95/AI-Virtual-TryOn`, which is published under the MIT license. The model uses a PyTorch image-to-image VTON pipeline based on multi-modal feature fusion, pose/parsing and a U-Net/GAN architecture.
+The service uses **FASHN VTON v1.5**, a maskless image-to-image virtual try-on model. The model and upstream implementation are Apache-2.0 licensed. It accepts a person image plus a garment image and supports `tops`, `bottoms`, and `one-pieces`. The published model requires roughly 8 GB VRAM for inference.
 
-Do not commit model weights, customer photos, generated customer images, or API keys to this repository.
+## Inputs
 
-## Deployment target
+The Gradio API endpoint is named `try_on` and accepts:
 
-A Hugging Face Space can be used for prototyping. ZeroGPU provides shared GPU execution for compatible Gradio Spaces, subject to account quotas and hosting requirements. For a production tailoring SaaS, move this service to dedicated GPU infrastructure when latency, concurrency and privacy requirements justify it.
+1. Customer front image as a data URL
+2. Garment/fabric image as a data URL
+3. Category: `tops`, `bottoms`, or `one-pieces`
 
-## API contract
+It returns a PNG data URL so the Smart Tailor Next.js API can display the result without requiring a separate object-storage service for the prototype.
 
-`POST /generate`
+## Smart Tailor integration
 
-Headers:
+Set the web app environment variable:
 
 ```text
-Content-Type: application/json
-Authorization: Bearer <optional-service-key>
+FASHN_VTON_ENDPOINT=https://<your-space>.hf.space/gradio_api/call/try_on
 ```
 
-Response:
+The Next.js adapter handles Gradio's two-step event/SSE API and converts the generated result into the normal `{ imageUrl }` response expected by the frontend.
 
-```json
-{
-  "imageUrl": "https://cdn.example.com/vton/result.png"
-}
-```
+## ZeroGPU
 
-Health endpoint:
+The inference function uses the Hugging Face `spaces.GPU` decorator. This makes the Space compatible with shared ZeroGPU execution for prototyping. ZeroGPU has daily quotas and queueing; dedicated GPU hosting should be used for production workloads.
 
-`GET /health` → `{ "status": "ok" }`
-
-## Important
-
-This scaffold intentionally does not pretend that the upstream research repository already exposes a production REST endpoint. The inference wrapper must be tested with the model's actual checkpoint/preprocessing requirements before it is connected to the live Smart Tailor app.
+Never commit customer photos, generated customer images, API keys, or model weights to the Smart Tailor repository.
