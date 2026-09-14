@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { PreviewRequest, PreviewResponse } from '@/lib/types';
 import { generateWithCatVTON } from '@/lib/ai/catvton';
-import { generateWithMitVTON } from '@/lib/ai/mit-vton';
+import { generateWithFashnVTON } from '@/lib/ai/fashn-vton';
 
 function buildColorMatch(colorName?: string) {
   const name = colorName ?? 'Navy';
@@ -21,24 +21,24 @@ export async function POST(request: Request) {
     const ratio = chest && waist ? chest / waist : 0;
     const bodyProfile = ratio >= 1.18 ? 'Athletic build' : ratio >= 1.08 ? 'Balanced build' : 'Straight build';
 
-    if (body.photoDataUrl) {
-      // Commercial-safe provider is first. CatVTON remains an optional
-      // prototype/testing fallback because its upstream license is non-commercial.
-      if (process.env.MIT_VTON_ENDPOINT) {
+    if (body.photoDataUrl && body.garmentDataUrl) {
+      // FASHN VTON 1.5 is the primary commercial-safe provider.
+      if (process.env.FASHN_VTON_ENDPOINT) {
         try {
-          const generated = await generateWithMitVTON(body);
+          const generated = await generateWithFashnVTON(body);
           return NextResponse.json({
             status: 'ready',
             imageUrl: generated.imageUrl,
             bodyProfile,
-            message: 'AI preview generated successfully.',
+            message: 'AI garment preview generated with FASHN VTON 1.5.',
             colorMatch: buildColorMatch(body.garment?.colorName),
           });
         } catch (error) {
-          console.error('MIT VTON generation failed:', error);
+          console.error('FASHN VTON generation failed:', error);
         }
       }
 
+      // CatVTON is retained only as a prototype/testing fallback.
       if (process.env.CATVTON_ENDPOINT) {
         try {
           const generated = await generateWithCatVTON(body);
@@ -55,14 +55,16 @@ export async function POST(request: Request) {
       }
     }
 
-    const providerConfigured = Boolean(process.env.MIT_VTON_ENDPOINT || process.env.CATVTON_ENDPOINT);
+    const providerConfigured = Boolean(process.env.FASHN_VTON_ENDPOINT || process.env.CATVTON_ENDPOINT);
     const response: PreviewResponse = {
       status: 'demo',
-      message: body.photoDataUrl
-        ? providerConfigured
-          ? 'AI provider was unavailable. The customer profile was created successfully; try generating again.'
-          : 'Photo received. Add MIT_VTON_ENDPOINT for the commercial-safe GPU provider, or CATVTON_ENDPOINT for prototype testing.'
-        : 'Add a front customer photo to start virtual try-on.',
+      message: !body.photoDataUrl
+        ? 'Add a front customer photo to start virtual try-on.'
+        : !body.garmentDataUrl
+          ? 'Add a garment/fabric photo so the AI can visualize the selected look.'
+          : providerConfigured
+            ? 'AI provider was unavailable. The customer profile was created successfully; try generating again.'
+            : 'Photo received. Configure FASHN_VTON_ENDPOINT for the GPU try-on service.',
       bodyProfile,
       colorMatch: buildColorMatch(body.garment?.colorName),
     };
